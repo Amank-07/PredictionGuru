@@ -6,7 +6,8 @@ import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_recall_curve
+from sklearn.model_selection import StratifiedKFold, cross_val_predict, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -14,7 +15,7 @@ from data_loader import clean_user_events, load_user_events
 from evaluate import analyze_model_errors, evaluate_predictions, print_model_comparison
 from features import create_user_features, get_model_feature_columns
 
-DEFAULT_DECISION_THRESHOLD = 0.6
+THRESHOLD_TUNING_FOLDS = 5
 
 
 def build_models() -> dict[str, object]:
@@ -46,6 +47,22 @@ def build_models() -> dict[str, object]:
 def predict_with_threshold(probabilities: pd.Series, threshold: float) -> pd.Series:
     """Convert probabilities into labels with a business-tunable threshold."""
     return (probabilities >= threshold).astype(int)
+
+
+def tune_decision_threshold(model: object, X_train: pd.DataFrame, y_train: pd.Series) -> float:
+    """
+    Pick the threshold that maximizes F1 on out-of-fold training predictions,
+    so the test set stays untouched for the final evaluation.
+    """
+    folds = StratifiedKFold(n_splits=THRESHOLD_TUNING_FOLDS, shuffle=True, random_state=42)
+    out_of_fold_probabilities = cross_val_predict(
+        model, X_train, y_train, cv=folds, method="predict_proba"
+    )[:, 1]
+
+    precision, recall, thresholds = precision_recall_curve(y_train, out_of_fold_probabilities)
+    # precision/recall have one more entry than thresholds; the last point has no threshold.
+    f1_scores = 2 * precision[:-1] * recall[:-1] / (precision[:-1] + recall[:-1]).clip(min=1e-12)
+    return float(thresholds[f1_scores.argmax()])
 
 
 def extract_logistic_feature_importance(
@@ -82,9 +99,7 @@ def extract_logistic_feature_importance(
     return importance_records
 
 
-def train_and_evaluate(
-    max_rows: int | None = 300_000, decision_threshold: float = DEFAULT_DECISION_THRESHOLD
-) -> dict[str, object]:
+def train_and_evaluate(max_rows: int | None = 300_000) -> dict[str, object]:
     raw_events = load_user_events(max_rows=max_rows)
     clean_events = clean_user_events(raw_events)
     user_features = create_user_features(clean_events)
@@ -102,13 +117,20 @@ def train_and_evaluate(
     evaluations: list[dict[str, object]] = []
     error_analysis_by_model: dict[str, dict[str, object]] = {}
     trained_models: dict[str, object] = {}
+    decision_thresholds: dict[str, float] = {}
 
     for model_name, model in models.items():
+        decision_threshold = tune_decision_threshold(model, X_train, y_train)
+        decision_thresholds[model_name] = decision_threshold
+        print(f"{model_name}: tuned decision threshold = {decision_threshold:.4f}")
+
         model.fit(X_train, y_train)
         probabilities = model.predict_proba(X_test)[:, 1]
         predictions = predict_with_threshold(probabilities, decision_threshold)
 
-        evaluations.append(evaluate_predictions(model_name, y_test, predictions))
+        evaluation = evaluate_predictions(model_name, y_test, predictions)
+        evaluation["decision_threshold"] = decision_threshold
+        evaluations.append(evaluation)
         error_analysis_by_model[model_name] = analyze_model_errors(X_test, y_test, predictions, probabilities)
         trained_models[model_name] = model
 
@@ -129,7 +151,7 @@ def train_and_evaluate(
         "evaluations": evaluations,
         "error_analysis": error_analysis_by_model,
         "feature_columns": feature_columns,
-        "decision_threshold": decision_threshold,
+        "decision_thresholds": decision_thresholds,
         "logistic_feature_importance": logistic_feature_importance,
     }
 
@@ -149,7 +171,7 @@ def save_artifacts(training_results: dict[str, object], output_dir: str = "model
         "feature_columns": training_results["feature_columns"],
         "evaluations": evaluations,
         "error_analysis": training_results["error_analysis"],
-        "decision_threshold": training_results["decision_threshold"],
+        "decision_threshold": training_results["decision_thresholds"][best_model_name],
         "logistic_feature_importance": training_results["logistic_feature_importance"],
     }
     (output_path / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")

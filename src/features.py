@@ -16,17 +16,34 @@ def _add_session_ids(events_dataframe: pd.DataFrame) -> pd.DataFrame:
     return dataframe.drop(columns=["previous_event_time"])
 
 
+def _truncate_at_first_transaction(events_dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Keep only events that happened before each user's first transaction."""
+    first_transaction_at = (
+        events_dataframe[events_dataframe["event"] == "transaction"].groupby("visitorid")["timestamp"].min()
+    )
+    cutoff = events_dataframe["visitorid"].map(first_transaction_at)
+    # Non-converters have no cutoff and keep their full history.
+    return events_dataframe[cutoff.isna() | (events_dataframe["timestamp"] < cutoff)]
+
+
 def create_user_features(clean_events_dataframe: pd.DataFrame) -> pd.DataFrame:
     """
     Build user-level features from cleaned event logs.
+
+    Features only use events before a user's first transaction, so the model sees
+    the same pre-purchase behaviour it would have at prediction time.
     """
-    dataframe = _add_session_ids(clean_events_dataframe)
+    converted_users = clean_events_dataframe.loc[
+        clean_events_dataframe["event"] == "transaction", "visitorid"
+    ].unique()
+
+    # Users whose first event is a purchase have no pre-purchase history and drop out here.
+    dataframe = _add_session_ids(_truncate_at_first_transaction(clean_events_dataframe))
 
     user_event_counts = dataframe.groupby("visitorid").agg(
         total_events=("event", "size"),
         total_views=("event", lambda values: (values == "view").sum()),
         total_addtocart=("event", lambda values: (values == "addtocart").sum()),
-        total_transactions=("event", lambda values: (values == "transaction").sum()),
         first_activity_at=("timestamp", "min"),
         last_activity_at=("timestamp", "max"),
         unique_items_viewed=("itemid", "nunique"),
@@ -52,7 +69,6 @@ def create_user_features(clean_events_dataframe: pd.DataFrame) -> pd.DataFrame:
 
     dataset_end_time = dataframe["timestamp"].max()
 
-    # Keep transaction counts out of model features to avoid target leakage.
     feature_dataframe["click_rate"] = (
         feature_dataframe["total_addtocart"] / feature_dataframe["total_events"].clip(lower=1)
     )
@@ -68,7 +84,7 @@ def create_user_features(clean_events_dataframe: pd.DataFrame) -> pd.DataFrame:
         dataset_end_time - feature_dataframe["last_activity_at"]
     ).dt.total_seconds().div(3600)
 
-    feature_dataframe["converted"] = (feature_dataframe["total_transactions"] > 0).astype(int)
+    feature_dataframe["converted"] = feature_dataframe["visitorid"].isin(converted_users).astype(int)
     feature_dataframe["active_days"] = (
         feature_dataframe["last_activity_at"] - feature_dataframe["first_activity_at"]
     ).dt.total_seconds().div(86400)
@@ -76,8 +92,6 @@ def create_user_features(clean_events_dataframe: pd.DataFrame) -> pd.DataFrame:
         feature_dataframe["total_addtocart"] / feature_dataframe["total_views"].clip(lower=1)
     )
 
-    # total_transactions is kept only long enough to define the target variable.
-    feature_dataframe = feature_dataframe.drop(columns=["total_transactions"])
     feature_dataframe = feature_dataframe.fillna(0.0)
     return feature_dataframe
 

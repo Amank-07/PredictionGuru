@@ -5,3 +5,4 @@ venv/
 .env
 data/events.csv
 models/*.joblib
+.DS_Store
