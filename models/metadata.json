@@ -1,5 +1,5 @@
 {
-  "best_model_name": "logistic_regression_calibrated",
+  "best_model_name": "random_forest",
   "feature_columns": [
     "total_events",
     "total_views",
@@ -18,81 +18,83 @@
   "evaluations": [
     {
       "model_name": "logistic_regression_calibrated",
-      "precision": 0.9844961240310077,
-      "recall": 0.9921875,
-      "f1_score": 0.9883268482490273,
+      "precision": 0.25757575757575757,
+      "recall": 0.8700787401574803,
+      "f1_score": 0.39748201438848924,
       "confusion_matrix": [
         [
-          31682,
-          4
+          31049,
+          637
         ],
         [
-          2,
-          254
+          33,
+          221
         ]
-      ]
+      ],
+      "decision_threshold": 0.02811828424697686
     },
     {
       "model_name": "random_forest",
-      "precision": 0.5032119914346895,
-      "recall": 0.91796875,
-      "f1_score": 0.6500691562932227,
+      "precision": 0.2805049088359046,
+      "recall": 0.7874015748031497,
+      "f1_score": 0.4136504653567735,
       "confusion_matrix": [
         [
-          31454,
-          232
+          31173,
+          513
         ],
         [
-          21,
-          235
+          54,
+          200
         ]
-      ]
+      ],
+      "decision_threshold": 0.8615938418864303
     }
   ],
   "error_analysis": {
     "logistic_regression_calibrated": {
-      "false_positive_count": 4,
-      "false_negative_count": 2,
-      "false_positive_avg_click_rate": 0.25,
-      "false_negative_avg_click_rate": 0.0,
-      "false_positive_avg_pages_per_session": 12.75,
-      "false_negative_avg_pages_per_session": 2.0
+      "false_positive_count": 637,
+      "false_negative_count": 33,
+      "false_positive_avg_click_rate": 0.34437517077949514,
+      "false_negative_avg_click_rate": 0.008954203691045796,
+      "false_positive_avg_pages_per_session": 2.3838250344754224,
+      "false_negative_avg_pages_per_session": 2.015151515151515
     },
     "random_forest": {
-      "false_positive_count": 232,
-      "false_negative_count": 21,
-      "false_positive_avg_click_rate": 0.16575819746963996,
-      "false_negative_avg_click_rate": 0.06666666666666667,
-      "false_positive_avg_pages_per_session": 3.32967655217782,
-      "false_negative_avg_pages_per_session": 1.5634920634920637
+      "false_positive_count": 513,
+      "false_negative_count": 54,
+      "false_positive_avg_click_rate": 0.34122983059779866,
+      "false_negative_avg_click_rate": 0.15242072539811866,
+      "false_positive_avg_pages_per_session": 2.1169374052414986,
+      "false_negative_avg_pages_per_session": 1.8890957807624473
     }
   },
-  "decision_threshold": 0.6,
+  "decision_threshold": 0.8615938418864303,
   "logistic_feature_importance": [
     {
-      "feature": "total_views",
-      "coefficient": -43.002009075973625,
-      "abs_coefficient": 43.002009075973625
+      "feature": "click_rate",
+      "coefficient": 1.1821199383437355,
+      "abs_coefficient": 1.1821199383437355
     },
     {
-      "feature": "total_events",
-      "coefficient": 24.076095744445066,
-      "abs_coefficient": 24.076095744445066
-    },
-    {
-      "feature": "activity_level",
-      "coefficient": 24.076095744445066,
-      "abs_coefficient": 24.076095744445066
-    },
-    {
-      "feature": "total_addtocart",
-      "coefficient": -5.00198427172376,
-      "abs_coefficient": 5.00198427172376
+      "feature": "avg_events_per_session",
+      "coefficient": 0.7524001284427073,
+      "abs_coefficient": 0.7524001284427073
     },
     {
       "feature": "pages_per_session",
-      "coefficient": -0.9071720191569997,
-      "abs_coefficient": 0.9071720191569997
+      "coefficient": -0.67600165380812,
+      "abs_coefficient": 0.67600165380812
+    },
+    {
+      "feature": "total_addtocart",
+      "coefficient": 0.613111179536787,
+      "abs_coefficient": 0.613111179536787
+    },
+    {
+      "feature": "session_duration",
+      "coefficient": 0.3174872762727604,
+      "abs_coefficient": 0.3174872762727604
     }
   ]
 }
